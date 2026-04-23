@@ -5,6 +5,8 @@
 
   // --- State ---
   let filters = { country: 'all', phase: 'all', group: 'all', city: 'all', team: '' };
+  let scoresMap = {};   // "Team1|Team2" → { home, away, status, minute }
+  let lastUpdated = null;
 
   // --- DOM refs ---
   const calendarEl   = document.getElementById('calendar');
@@ -16,6 +18,8 @@
   const modalClose   = document.getElementById('modalClose');
   const filterTeam   = document.getElementById('filterTeam');
   const filterCity   = document.getElementById('filterCity');
+  const apiBanner    = document.getElementById('apiBanner');
+  const apiModal     = document.getElementById('apiModal');
 
   // --- Build city dropdown ---
   const cities = [...new Set(Object.values(STADIUMS).map(s => s.city))].sort();
@@ -41,7 +45,7 @@
   function updateProgress() {
     const today = new Date().toISOString().slice(0, 10);
     const total  = MATCHES.length;
-    const played = MATCHES.filter(m => m.date < today || (m.date === today)).length;
+    const played = MATCHES.filter(m => m.date < today || m.date === today).length;
     const pct    = Math.round((played / total) * 100);
     progressBar.style.width = pct + '%';
     progressLbl.textContent = `${played} match${played > 1 ? 's' : ''} joué${played > 1 ? 's' : ''} sur ${total} (${pct}%)`;
@@ -58,7 +62,7 @@
   }
 
   // --- Format date in French ---
-  const DAYS_FR  = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+  const DAYS_FR   = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
   const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 
   function formatDate(dateStr) {
@@ -70,14 +74,50 @@
   function formatDateShort(dateStr) {
     const [y, mo, d] = dateStr.split('-').map(Number);
     const dt = new Date(y, mo - 1, d);
-    return `${DAYS_FR[dt.getDay()].slice(0,3).toUpperCase()}. ${d} ${MONTHS_FR[mo - 1].toUpperCase().slice(0,3)}`;
+    return `${DAYS_FR[dt.getDay()].slice(0,3).toUpperCase()}. ${d} ${MONTHS_FR[mo-1].toUpperCase().slice(0,3)}`;
+  }
+
+  // --- Score helpers ---
+  function getScore(m) {
+    return scoresMap[`${m.team1}|${m.team2}`] || scoresMap[`${m.team2}|${m.team1}`] || null;
+  }
+
+  function scoreLabel(score) {
+    if (!score) return '';
+    const { home, away, status } = score;
+    if (status === 'FINISHED' && home !== null)
+      return `<span class="score-ft"><span class="score-num">${home} – ${away}</span> <span class="score-tag">FT</span></span>`;
+    if ((status === 'IN_PLAY' || status === 'PAUSED') && home !== null)
+      return `<span class="score-live"><span class="score-dot">●</span> <span class="score-num">${home} – ${away}</span>${score.minute ? ` <span class="score-min">${score.minute}'</span>` : ''}</span>`;
+    if (status === 'POSTPONED')
+      return `<span class="score-postponed">Reporté</span>`;
+    return '';
+  }
+
+  function vsOrScore(m) {
+    const s = getScore(m);
+    if (!s) return '<div class="vs-divider">VS</div>';
+    const { home, away, status } = s;
+    if ((status === 'FINISHED' || status === 'IN_PLAY' || status === 'PAUSED') && home !== null) {
+      const cls = (status === 'IN_PLAY' || status === 'PAUSED') ? 'score-board live' : 'score-board ft';
+      return `<div class="${cls}"><span>${home}</span><span class="score-sep">–</span><span>${away}</span></div>`;
+    }
+    return '<div class="vs-divider">VS</div>';
+  }
+
+  function statusBadge(m) {
+    const s = getScore(m);
+    if (!s) return `<span class="match-time">${m.time}</span>`;
+    const { status, minute } = s;
+    if (status === 'IN_PLAY' || status === 'PAUSED')
+      return `<span class="live-badge">● LIVE${minute ? ` ${minute}'` : ''}</span>`;
+    if (status === 'FINISHED')
+      return `<span class="ft-badge">FT</span>`;
+    return `<span class="match-time">${m.time}</span>`;
   }
 
   // --- Build card HTML ---
   function buildCard(m) {
-    const phaseClass = m.phase.replace(/[^a-zA-Z0-9]/g, '').replace(' ', '-');
-    const grpTag = m.group ? `<span class="group-tag">Gr. ${m.group}</span>` : '';
-    const jrnTag = m.matchday ? `<span class="group-tag">J${m.matchday}</span>` : '';
     return `
     <div class="match-card"
          data-id="${m.id}"
@@ -89,14 +129,14 @@
          data-team2="${m.team2}">
       <div class="card-top">
         <span class="phase-badge phase-${m.phase}">${m.phase}${m.group ? ` · Groupe ${m.group}` : ''}</span>
-        <span class="match-time">${m.time}</span>
+        ${statusBadge(m)}
       </div>
       <div class="teams-row">
         <div class="team">
           <span class="team-flag">${m.flag1}</span>
           <span class="team-name">${m.team1}</span>
         </div>
-        <div class="vs-divider">VS</div>
+        ${vsOrScore(m)}
         <div class="team">
           <span class="team-flag">${m.flag2}</span>
           <span class="team-name">${m.team2}</span>
@@ -119,16 +159,14 @@
       if (filters.group   !== 'all' && m.group   !== filters.group)   return false;
       if (filters.city    !== 'all' && m.city    !== filters.city)    return false;
       if (teamQ) {
-        const t1 = m.team1.toLowerCase();
-        const t2 = m.team2.toLowerCase();
-        if (!t1.includes(teamQ) && !t2.includes(teamQ)) return false;
+        if (!m.team1.toLowerCase().includes(teamQ) &&
+            !m.team2.toLowerCase().includes(teamQ)) return false;
       }
       return true;
     });
 
     statFiltered.textContent = visible.length;
 
-    // Group by date
     const byDate = groupByDate(visible);
     const sortedDates = Object.keys(byDate).sort();
 
@@ -137,19 +175,9 @@
       return;
     }
 
-    // Group phase sections
     let html = '';
-    let currentPhase = null;
-
     sortedDates.forEach(date => {
       const dayMatches = byDate[date];
-      // Phase separator (only for knockout rounds)
-      dayMatches.forEach(m => {
-        if (m.phase !== 'Groupes' && m.phase !== currentPhase) {
-          currentPhase = m.phase;
-        }
-      });
-
       const count = dayMatches.length;
       html += `
       <div class="day-block">
@@ -164,18 +192,44 @@
     });
 
     calendarEl.innerHTML = html;
-
-    // Attach click handlers
     calendarEl.querySelectorAll('.match-card').forEach(card => {
       card.addEventListener('click', () => openModal(+card.dataset.id));
     });
+
+    // Update "last updated" label
+    if (lastUpdated) {
+      let lbl = document.getElementById('lastUpdatedLbl');
+      if (!lbl) {
+        lbl = document.createElement('p');
+        lbl.id = 'lastUpdatedLbl';
+        lbl.className = 'last-updated';
+        calendarEl.insertAdjacentElement('beforebegin', lbl);
+      }
+      lbl.textContent = `Scores mis à jour à ${lastUpdated}`;
+    }
   }
 
-  // --- Modal ---
+  // --- Apply scores then re-render ---
+  function applyScores(map) {
+    if (!map) return;
+    scoresMap = map;
+    const now = new Date();
+    lastUpdated = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+    render();
+  }
+
+  // --- Match Modal ---
   function openModal(id) {
     const m = MATCHES.find(x => x.id === id);
     if (!m) return;
-    const s = STADIUMS[m.stadium] || {};
+    const s  = STADIUMS[m.stadium] || {};
+    const sc = getScore(m);
+    const scoreHtml = sc ? `
+      <div class="modal-detail" style="grid-column:span 2; text-align:center">
+        <div class="modal-detail-label">⚽ Score</div>
+        <div class="modal-score">${scoreLabel(sc)}</div>
+      </div>` : '';
+
     modalContent.innerHTML = `
       <div class="modal-phase">${m.phase}${m.group ? ` · Groupe ${m.group}` : ''}${m.matchday ? ` · Journée ${m.matchday}` : ''}</div>
       <div class="modal-match-num">Match #${m.id} · ${formatDate(m.date)}</div>
@@ -184,13 +238,14 @@
           <div class="modal-team-flag">${m.flag1}</div>
           <div class="modal-team-name">${m.team1}</div>
         </div>
-        <div class="modal-vs">VS</div>
+        <div class="modal-vs">${sc && sc.home !== null ? `${sc.home}–${sc.away}` : 'VS'}</div>
         <div class="modal-team">
           <div class="modal-team-flag">${m.flag2}</div>
           <div class="modal-team-name">${m.team2}</div>
         </div>
       </div>
       <div class="modal-details">
+        ${scoreHtml}
         <div class="modal-detail">
           <div class="modal-detail-label">🕐 Heure locale</div>
           <div class="modal-detail-value">${m.time}</div>
@@ -229,7 +284,7 @@
   modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-  // --- Filter event bindings ---
+  // --- Filter bindings ---
   function bindFilterBtns(groupId, filterKey) {
     document.getElementById(groupId).addEventListener('click', e => {
       const btn = e.target.closest('.btn-filter');
@@ -240,20 +295,12 @@
       render();
     });
   }
-
   bindFilterBtns('filterCountry', 'country');
   bindFilterBtns('filterPhase',   'phase');
   bindFilterBtns('filterGroup',   'group');
 
-  filterCity.addEventListener('change', () => {
-    filters.city = filterCity.value;
-    render();
-  });
-
-  filterTeam.addEventListener('input', () => {
-    filters.team = filterTeam.value;
-    render();
-  });
+  filterCity.addEventListener('change', () => { filters.city = filterCity.value; render(); });
+  filterTeam.addEventListener('input',  () => { filters.team = filterTeam.value; render(); });
 
   document.getElementById('resetFilters').addEventListener('click', () => {
     filters = { country: 'all', phase: 'all', group: 'all', city: 'all', team: '' };
@@ -265,7 +312,40 @@
     render();
   });
 
-  // --- Scroll to top button ---
+  // --- API Banner & Modal ---
+  function showApiBanner() {
+    if (WC_API.getToken()) apiBanner.hidden = true;
+    else apiBanner.style.display = 'flex';
+  }
+
+  document.getElementById('apiSetupBtn').addEventListener('click', () => {
+    document.getElementById('apiTokenInput').value = WC_API.getToken();
+    apiModal.hidden = false;
+  });
+  document.getElementById('apiBannerClose').addEventListener('click', () => {
+    apiBanner.style.display = 'none';
+  });
+  document.getElementById('apiCancelBtn').addEventListener('click', () => {
+    apiModal.hidden = true;
+  });
+  document.getElementById('apiSaveBtn').addEventListener('click', async () => {
+    const token = document.getElementById('apiTokenInput').value.trim();
+    const status = document.getElementById('apiStatus');
+    if (!token) { status.textContent = 'Token vide.'; return; }
+    status.textContent = '⏳ Vérification…';
+    WC_API.saveToken(token);
+    try {
+      const scores = await WC_API.loadScores();
+      status.textContent = scores ? '✅ Connecté ! Scores chargés.' : '✅ Token enregistré. Les scores apparaîtront dès le début du tournoi.';
+      apiBanner.style.display = 'none';
+      if (scores) applyScores(scores);
+      setTimeout(() => { apiModal.hidden = true; }, 1800);
+    } catch {
+      status.textContent = '❌ Token invalide ou quota dépassé.';
+    }
+  });
+
+  // --- Scroll to top ---
   const scrollBtn = document.createElement('button');
   scrollBtn.className = 'scroll-top';
   scrollBtn.textContent = '↑';
@@ -276,7 +356,7 @@
     scrollBtn.classList.toggle('visible', window.scrollY > 400);
   });
 
-  // --- Keyboard shortcuts ---
+  // --- Keyboard shortcut ---
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
     if (e.key === '/') { e.preventDefault(); filterTeam.focus(); }
@@ -285,5 +365,12 @@
   // --- Init ---
   updateProgress();
   render();
+  showApiBanner();
+
+  // Load scores if token already saved
+  if (WC_API.getToken()) {
+    WC_API.loadScores().then(applyScores);
+    WC_API.startAutoRefresh(applyScores);
+  }
 
 })();

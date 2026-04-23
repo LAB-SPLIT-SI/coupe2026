@@ -20,6 +20,30 @@
   </div>
 </header>
 
+<div id="apiBanner" class="api-banner">
+  <span>🔑 Connectez une API gratuite pour voir les scores en direct</span>
+  <button id="apiSetupBtn" class="btn-api-setup">Configurer →</button>
+  <button id="apiBannerClose" class="btn-api-close">✕</button>
+</div>
+
+<div id="apiModal" class="api-modal" hidden>
+  <div class="api-modal-box">
+    <h3>⚡ Scores en direct</h3>
+    <p>Créez un compte gratuit sur <strong>football-data.org</strong> pour activer les scores en temps réel.<br>Aucune carte bancaire requise.</p>
+    <ol>
+      <li>Inscrivez-vous sur <code>football-data.org/client/register</code></li>
+      <li>Copiez votre token API dans l'email de confirmation</li>
+      <li>Collez-le ci-dessous</li>
+    </ol>
+    <input id="apiTokenInput" type="text" placeholder="Votre token API…" autocomplete="off" spellcheck="false">
+    <div class="api-modal-actions">
+      <button id="apiSaveBtn" class="btn-save">✓ Enregistrer</button>
+      <button id="apiCancelBtn" class="btn-cancel">Annuler</button>
+    </div>
+    <p id="apiStatus" class="api-status"></p>
+  </div>
+</div>
+
 <section class="hero">
   <h1>Calendrier Complet</h1>
   <p>Tous les 104 matchs de la phase de groupes aux finales</p>
@@ -98,6 +122,7 @@
 </footer>
 
 <script src="data.js"></script>
+<script src="api.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

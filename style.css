@@ -488,6 +488,162 @@ footer {
 }
 .scroll-top.visible { opacity: 1; pointer-events: all; }
 
+/* API BANNER */
+.api-banner {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(90deg, #1a2f4a, #1e3a5f);
+  border-bottom: 1px solid rgba(90,160,255,0.3);
+  padding: 10px 20px;
+  font-size: 0.85rem;
+  flex-wrap: wrap;
+}
+.api-banner span { flex: 1; }
+.btn-api-setup {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 6px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.btn-api-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 2px 6px;
+}
+
+/* API SETUP MODAL */
+.api-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  padding: 20px;
+  backdrop-filter: blur(4px);
+}
+.api-modal[hidden] { display: none !important; }
+.api-modal-box {
+  background: var(--secondary);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 28px;
+  max-width: 460px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+.api-modal-box h3 { font-size: 1.2rem; margin-bottom: 10px; }
+.api-modal-box p { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 14px; line-height: 1.5; }
+.api-modal-box ol { font-size: 0.85rem; color: var(--text-dim); margin: 0 0 16px 18px; line-height: 2; }
+.api-modal-box code {
+  background: rgba(255,255,255,0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+#apiTokenInput {
+  width: 100%;
+  background: var(--card-bg);
+  color: var(--text);
+  border: 1px solid var(--card-border);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: monospace;
+  outline: none;
+  margin-bottom: 14px;
+  transition: border-color 0.2s;
+}
+#apiTokenInput:focus { border-color: var(--accent); }
+.api-modal-actions { display: flex; gap: 10px; }
+.btn-save {
+  background: var(--green);
+  color: #fff;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.btn-cancel {
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--card-border);
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.api-status { font-size: 0.82rem; margin-top: 10px; color: var(--text-dim); min-height: 20px; }
+
+/* SCORES */
+.score-board {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 1.4rem;
+  font-weight: 900;
+  padding: 6px 12px;
+  border-radius: 8px;
+  min-width: 80px;
+  justify-content: center;
+}
+.score-board.ft   { background: rgba(255,255,255,0.08); color: #fff; }
+.score-board.live { background: rgba(233,69,96,0.2); color: #ff6b85; animation: pulse 1.5s infinite; }
+.score-sep { font-size: 1rem; color: var(--text-dim); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+.live-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #ff6b85;
+  background: rgba(233,69,96,0.15);
+  padding: 3px 8px;
+  border-radius: 20px;
+  animation: pulse 1.5s infinite;
+}
+.ft-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  background: rgba(255,255,255,0.06);
+  padding: 3px 8px;
+  border-radius: 20px;
+}
+
+/* Modal score */
+.modal-score { font-size: 1.6rem; font-weight: 900; margin-top: 4px; }
+.score-ft .score-num   { color: #fff; }
+.score-ft .score-tag   { font-size: 0.7rem; color: var(--text-dim); vertical-align: middle; }
+.score-live .score-dot { color: #ff6b85; animation: pulse 1.5s infinite; }
+.score-live .score-num { color: #ff6b85; }
+.score-live .score-min { font-size: 0.7rem; color: var(--text-dim); }
+.score-postponed       { font-size: 0.8rem; color: var(--text-dim); }
+
+/* Last updated label */
+.last-updated {
+  text-align: right;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  padding: 6px 4px 0;
+  opacity: 0.7;
+}
+
 @media (max-width: 700px) {
   .hero h1 { font-size: 1.8rem; }
   .matches-grid { grid-template-columns: 1fr; }
