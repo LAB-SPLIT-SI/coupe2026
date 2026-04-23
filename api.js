@@ -1,96 +1,19 @@
-// football-data.org API — smart fetching for FIFA World Cup 2026
-//
-// Rules:
-//  • Before Jun 11 → no API call, tournament not started
-//  • During tournament → fetch on demand, auto-refresh
-//  • After Jul 19     → fetch once, then use permanent localStorage cache
-//  • Rate limit: free tier = 10 req/min → minimum 6s between calls
-//  • Exponential backoff on errors (10s, 20s, 40s … max 5min)
+// Lecture des scores depuis scores.json (généré par GitHub Actions)
+// Le token API reste dans les secrets GitHub — jamais exposé au navigateur.
+// Tous les visiteurs partagent le même fichier mis à jour toutes les 10 min.
 
-const API_BASE  = 'https://api.football-data.org/v4';
-const COMP_CODE = 'WC';
-const TOKEN_KEY = 'wc2026_token';
-const CACHE_KEY = 'wc2026_cache';
+const SCORES_URL = './scores.json';
 
 const TOURNAMENT_START = new Date('2026-06-11T00:00:00');
-const TOURNAMENT_END   = new Date('2026-07-20T00:00:00'); // day after final
-const MIN_INTERVAL_MS  = 8000;   // 8s min between requests (~7/min, safe margin)
-const LIVE_REFRESH_MS  = 45000;  // 45s when match in play
-const IDLE_REFRESH_MS  = 300000; // 5min when no live match
-const POST_REFRESH_MS  = Infinity; // after tournament: no refresh needed
+const TOURNAMENT_END   = new Date('2026-07-20T00:00:00');
 
-// ---- Token ----
-function getToken()    { return localStorage.getItem(TOKEN_KEY) || ''; }
-function saveToken(t)  { localStorage.setItem(TOKEN_KEY, t.trim()); }
+const LIVE_REFRESH_MS  = 45000;   // 45s si un match est en cours
+const IDLE_REFRESH_MS  = 300000;  // 5min sinon (scores.json n'est mis à jour que toutes les 10min)
 
-// ---- Tournament window ----
-function tournamentPhase() {
-  const now = new Date();
-  if (now < TOURNAMENT_START) return 'before';
-  if (now >= TOURNAMENT_END)  return 'after';
-  return 'during';
-}
-
-// ---- Persistent cache (localStorage for post-tournament, sessionStorage during) ----
-function readCache() {
-  try {
-    const phase = tournamentPhase();
-    const store = phase === 'after' ? localStorage : sessionStorage;
-    const raw   = store.getItem(CACHE_KEY);
-    if (!raw) return null;
-    const { ts, data, phase: savedPhase } = JSON.parse(raw);
-    // After tournament: cache is permanent (no TTL)
-    if (savedPhase === 'after') return data;
-    // During: TTL depends on live activity
-    const ttl = hasLiveMatch(data) ? LIVE_REFRESH_MS : IDLE_REFRESH_MS;
-    if (Date.now() - ts > ttl) return null;
-    return data;
-  } catch { return null; }
-}
-
-function writeCache(data) {
-  const phase = tournamentPhase();
-  const store = phase === 'after' ? localStorage : sessionStorage;
-  store.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data, phase }));
-}
-
-function hasLiveMatch(matches) {
-  return Array.isArray(matches) &&
-    matches.some(m => m.status === 'IN_PLAY' || m.status === 'PAUSED');
-}
-
-// ---- Rate-limit guard ----
-let lastCallTs = 0;
-async function rateLimitedFetch(url, token) {
-  const wait = MIN_INTERVAL_MS - (Date.now() - lastCallTs);
-  if (wait > 0) await new Promise(r => setTimeout(r, wait));
-  lastCallTs = Date.now();
-  const res = await fetch(url, { headers: { 'X-Auth-Token': token } });
-  if (res.status === 429) throw Object.assign(new Error('Rate limited'), { code: 429 });
-  if (!res.ok)            throw Object.assign(new Error(`HTTP ${res.status}`), { code: res.status });
-  return res.json();
-}
-
-// ---- Fetch with exponential backoff ----
-async function fetchWithRetry(token, attempt = 0) {
-  try {
-    const json = await rateLimitedFetch(`${API_BASE}/competitions/${COMP_CODE}/matches`, token);
-    return json.matches || [];
-  } catch (e) {
-    const maxAttempts = 4;
-    if (attempt >= maxAttempts) throw e;
-    const delay = Math.min(10000 * Math.pow(2, attempt), 300000); // 10s, 20s, 40s, 80s → max 5min
-    console.warn(`WC API: ${e.message}, retry in ${delay/1000}s (attempt ${attempt+1}/${maxAttempts})`);
-    await new Promise(r => setTimeout(r, delay));
-    return fetchWithRetry(token, attempt + 1);
-  }
-}
-
-// ---- Normalize API team names → French ----
 const NAME_MAP = {
   'United States': 'États-Unis', 'USA': 'États-Unis',
   'Mexico': 'Mexique', 'South Korea': 'Corée du Sud',
-  'Saudi Arabia': 'Arabie saoudite', 'Ivory Coast': "Côte d'Ivoire",
+  'Saudi Arabia': 'Arabie saoudite', "Ivory Coast": "Côte d'Ivoire",
   'Netherlands': 'Pays-Bas', 'Australia': 'Australie',
   'Japan': 'Japon', 'Germany': 'Allemagne', 'Spain': 'Espagne',
   'England': 'Angleterre', 'Italy': 'Italie', 'Brazil': 'Brésil',
@@ -108,12 +31,22 @@ const NAME_MAP = {
 };
 function norm(n) { return NAME_MAP[n] || n; }
 
-// ---- Build scores map from raw API matches ----
-function buildScoresMap(apiMatches) {
+function tournamentPhase() {
+  const now = new Date();
+  if (now < TOURNAMENT_START) return 'before';
+  if (now >= TOURNAMENT_END)  return 'after';
+  return 'during';
+}
+
+function hasLive(matches) {
+  return matches.some(m => m.status === 'IN_PLAY' || m.status === 'PAUSED');
+}
+
+function buildScoresMap(matches) {
   const map = {};
-  apiMatches.forEach(m => {
-    const h = norm(m.homeTeam?.name || m.homeTeam?.shortName || '');
-    const a = norm(m.awayTeam?.name || m.awayTeam?.shortName || '');
+  matches.forEach(m => {
+    const h = norm(m.homeTeam || '');
+    const a = norm(m.awayTeam || '');
     map[`${h}|${a}`] = {
       home:   m.score?.fullTime?.home ?? m.score?.halfTime?.home ?? null,
       away:   m.score?.fullTime?.away ?? m.score?.halfTime?.away ?? null,
@@ -124,71 +57,54 @@ function buildScoresMap(apiMatches) {
   return map;
 }
 
-// ---- Public API ----
 const WC_API = {
-  getToken,
-  saveToken,
   tournamentPhase,
 
-  // Returns scores map or null (never throws)
+  // Retourne { scores, updated } ou null si avant le tournoi
   async loadScores() {
-    const token = getToken();
-    if (!token) return null;
-
-    const phase = tournamentPhase();
-
-    // Before tournament: don't hit the API at all
-    if (phase === 'before') return null;
-
-    // Check cache first
-    const cached = readCache();
-    if (cached) return buildScoresMap(cached);
-
+    if (tournamentPhase() === 'before') return null;
     try {
-      const matches = await fetchWithRetry(token);
-      writeCache(matches);
-      return buildScoresMap(matches);
-    } catch (e) {
-      console.warn('WC API unavailable:', e.message);
+      // Cache-bust léger : on ajoute les minutes arrondies à 10min
+      const t = Math.floor(Date.now() / 60000 / 10);
+      const res = await fetch(`${SCORES_URL}?t=${t}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data.matches?.length) return null;
+      return { scores: buildScoresMap(data.matches), updated: data.updated };
+    } catch {
       return null;
     }
   },
 
-  // Auto-refresh: only fires during tournament, adapts interval to live activity
+  // Auto-refresh : adapte l'intervalle selon présence d'un match live
   startAutoRefresh(callback) {
-    if (tournamentPhase() !== 'during') return () => {};
+    const phase = tournamentPhase();
+    if (phase === 'before') return () => {};
 
     let timer = null;
 
     async function tick() {
-      const token = getToken();
-      if (!token || tournamentPhase() !== 'during') return;
-      try {
-        const matches = await fetchWithRetry(token);
-        writeCache(matches);
-        callback(buildScoresMap(matches));
-        const delay = hasLiveMatch(matches) ? LIVE_REFRESH_MS : IDLE_REFRESH_MS;
-        clearTimeout(timer);
+      const result = await WC_API.loadScores();
+      if (result) {
+        callback(result);
+        // Vérifie si un match est en cours pour accélérer le refresh
+        const live = Object.values(result.scores)
+          .some(s => s.status === 'IN_PLAY' || s.status === 'PAUSED');
+        const delay = live ? LIVE_REFRESH_MS : IDLE_REFRESH_MS;
         timer = setTimeout(tick, delay);
-      } catch {
-        // backoff already handled in fetchWithRetry; schedule a long retry
+      } else {
         timer = setTimeout(tick, IDLE_REFRESH_MS);
       }
     }
 
-    // First refresh after initial load
     timer = setTimeout(tick, IDLE_REFRESH_MS);
     return () => clearTimeout(timer);
   },
 
-  // Human-readable status message for the UI
-  statusMessage() {
-    const phase = tournamentPhase();
-    if (phase === 'before') {
-      const days = Math.ceil((TOURNAMENT_START - new Date()) / 86400000);
-      return `⏳ Le tournoi commence dans ${days} jour${days > 1 ? 's' : ''}. Les scores s'activeront automatiquement le 11 juin.`;
-    }
-    if (phase === 'after') return '🏆 Tournoi terminé. Les scores finaux sont enregistrés.';
-    return null; // during → normal operation
-  }
+  // Message informatif affiché avant le tournoi
+  countdownMessage() {
+    const days = Math.ceil((TOURNAMENT_START - new Date()) / 86400000);
+    if (days > 0) return `⏳ Tournoi dans ${days} jour${days > 1 ? 's' : ''} (11 juin 2026) — les scores s'afficheront automatiquement`;
+    return null;
+  },
 };

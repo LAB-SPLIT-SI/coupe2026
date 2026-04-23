@@ -210,11 +210,16 @@
   }
 
   // --- Apply scores then re-render ---
-  function applyScores(map) {
-    if (!map) return;
-    scoresMap = map;
-    const now = new Date();
-    lastUpdated = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+  function applyScores(result) {
+    if (!result) return;
+    scoresMap = result.scores || result; // support both shapes
+    if (result.updated) {
+      // "2026-06-15T14:32:00Z" → "14:32"
+      lastUpdated = result.updated.slice(11, 16) + ' UTC';
+    } else {
+      const now = new Date();
+      lastUpdated = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+    }
     render();
   }
 
@@ -312,48 +317,19 @@
     render();
   });
 
-  // --- API Banner & Modal ---
+  // --- API Banner (info seulement, plus de saisie de token) ---
   function showApiBanner() {
-    if (WC_API.getToken()) apiBanner.hidden = true;
-    else apiBanner.style.display = 'flex';
+    const msg = WC_API.countdownMessage();
+    if (msg) {
+      apiBanner.querySelector('span').textContent = msg;
+      apiBanner.style.display = 'flex';
+    } else {
+      apiBanner.style.display = 'none';
+    }
   }
 
-  document.getElementById('apiSetupBtn').addEventListener('click', () => {
-    document.getElementById('apiTokenInput').value = WC_API.getToken();
-    apiModal.hidden = false;
-  });
   document.getElementById('apiBannerClose').addEventListener('click', () => {
     apiBanner.style.display = 'none';
-  });
-  document.getElementById('apiCancelBtn').addEventListener('click', () => {
-    apiModal.hidden = true;
-  });
-  document.getElementById('apiSaveBtn').addEventListener('click', async () => {
-    const token = document.getElementById('apiTokenInput').value.trim();
-    const statusEl = document.getElementById('apiStatus');
-    if (!token) { statusEl.textContent = 'Token vide.'; return; }
-
-    // Show smart pre-tournament message without hitting the API
-    const msg = WC_API.statusMessage();
-    if (msg) {
-      WC_API.saveToken(token);
-      statusEl.textContent = `✅ Token enregistré. ${msg}`;
-      apiBanner.style.display = 'none';
-      setTimeout(() => { apiModal.hidden = true; }, 3000);
-      return;
-    }
-
-    statusEl.textContent = '⏳ Vérification…';
-    WC_API.saveToken(token);
-    try {
-      const scores = await WC_API.loadScores();
-      statusEl.textContent = scores ? '✅ Connecté ! Scores chargés.' : '✅ Token enregistré.';
-      apiBanner.style.display = 'none';
-      if (scores) applyScores(scores);
-      setTimeout(() => { apiModal.hidden = true; }, 1800);
-    } catch {
-      statusEl.textContent = '❌ Token invalide ou quota dépassé.';
-    }
   });
 
   // --- Scroll to top ---
@@ -378,25 +354,10 @@
   render();
   showApiBanner();
 
-  // Load scores if token already saved
-  if (WC_API.getToken()) {
-    // Only hit the API during/after tournament — never before
-    if (WC_API.tournamentPhase() !== 'before') {
-      WC_API.loadScores().then(applyScores);
-      WC_API.startAutoRefresh(applyScores);
-    }
-  }
-
-  // Update banner text with countdown if before tournament
-  const phase = WC_API.tournamentPhase();
-  if (phase === 'before') {
-    const days = Math.ceil((new Date('2026-06-11') - new Date()) / 86400000);
-    const bannerSpan = apiBanner.querySelector('span');
-    if (bannerSpan) bannerSpan.textContent =
-      `⏳ Tournoi dans ${days} jour${days > 1 ? 's' : ''} · Enregistrez votre token API maintenant pour activer les scores en direct dès le coup d'envoi`;
-  } else if (phase === 'after') {
-    const bannerSpan = apiBanner.querySelector('span');
-    if (bannerSpan) bannerSpan.textContent = '🏆 Tournoi terminé — connectez votre token pour charger les scores finaux';
+  // Charger les scores dès que le tournoi est commencé
+  if (WC_API.tournamentPhase() !== 'before') {
+    WC_API.loadScores().then(applyScores);
+    WC_API.startAutoRefresh(applyScores);
   }
 
 })();

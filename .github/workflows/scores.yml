@@ -1,0 +1,76 @@
+name: Mise à jour des scores
+
+on:
+  schedule:
+    # Toutes les 10 minutes — le job vérifie lui-même si on est dans la période du tournoi
+    - cron: '*/10 * * * *'
+  workflow_dispatch:   # déclenchement manuel possible depuis l'onglet Actions
+
+jobs:
+  fetch-scores:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # pour pouvoir committer scores.json
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Vérifier la période du tournoi
+        id: period
+        run: |
+          today=$(date -u +%Y-%m-%d)
+          # Actif du 11 juin au 19 juillet 2026 inclus
+          if [[ "$today" > "2026-06-10" && "$today" < "2026-07-20" ]]; then
+            echo "active=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "active=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Récupérer les scores (football-data.org)
+        if: steps.period.outputs.active == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          FOOTBALL_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
+        run: |
+          curl -sf \
+            -H "X-Auth-Token: $FOOTBALL_TOKEN" \
+            "https://api.football-data.org/v4/competitions/WC/matches" \
+            -o scores_raw.json
+
+          # Alléger le JSON : on ne garde que le strict nécessaire
+          python3 - <<'EOF'
+          import json
+          from datetime import datetime, timezone
+
+          with open("scores_raw.json") as f:
+              data = json.load(f)
+
+          slim = []
+          for m in data.get("matches", []):
+              slim.append({
+                  "homeTeam": m["homeTeam"].get("name", ""),
+                  "awayTeam": m["awayTeam"].get("name", ""),
+                  "status":   m.get("status"),
+                  "score":    m.get("score", {}),
+                  "minute":   m.get("minute"),
+              })
+
+          out = {
+              "matches": slim,
+              "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+          }
+          with open("scores.json", "w") as f:
+              json.dump(out, f, separators=(",", ":"))
+          print(f"✓ {len(slim)} matchs écrits dans scores.json")
+          EOF
+
+      - name: Commit si le fichier a changé
+        if: steps.period.outputs.active == 'true' || github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add scores.json
+          # Commit uniquement si des scores ont réellement changé
+          git diff --staged --quiet \
+            && echo "Aucun changement de score." \
+            || git commit -m "chore: scores $(date -u '+%H:%M UTC')" && git push
