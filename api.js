@@ -10,24 +10,66 @@ const TOURNAMENT_END   = new Date('2026-07-20T00:00:00');
 const LIVE_REFRESH_MS  = 45000;   // 45s si un match est en cours
 const IDLE_REFRESH_MS  = 300000;  // 5min sinon (scores.json n'est mis à jour que toutes les 10min)
 
+// Noms API-Football (anglais FIFA) → français du calendrier
 const NAME_MAP = {
-  'United States': 'États-Unis', 'USA': 'États-Unis',
-  'Mexico': 'Mexique', 'South Korea': 'Corée du Sud',
-  'Saudi Arabia': 'Arabie saoudite', "Ivory Coast": "Côte d'Ivoire",
-  'Netherlands': 'Pays-Bas', 'Australia': 'Australie',
-  'Japan': 'Japon', 'Germany': 'Allemagne', 'Spain': 'Espagne',
-  'England': 'Angleterre', 'Italy': 'Italie', 'Brazil': 'Brésil',
-  'Argentina': 'Argentine', 'Portugal': 'Portugal', 'Morocco': 'Maroc',
-  'Belgium': 'Belgique', 'Croatia': 'Croatie', 'Poland': 'Pologne',
-  'Serbia': 'Serbie', 'Switzerland': 'Suisse', 'Denmark': 'Danemark',
-  'Austria': 'Autriche', 'Hungary': 'Hongrie', 'Turkey': 'Turquie',
-  'Ukraine': 'Ukraine', 'Ecuador': 'Équateur', 'Colombia': 'Colombie',
-  'Senegal': 'Sénégal', 'Tunisia': 'Tunisie', 'Cameroon': 'Cameroun',
-  'Nigeria': 'Nigeria', 'Ghana': 'Ghana', 'Egypt': 'Égypte',
-  'Algeria': 'Algérie', 'Mali': 'Mali', 'Uruguay': 'Uruguay',
-  'Chile': 'Chili', 'Paraguay': 'Paraguay', 'Bolivia': 'Bolivie',
-  'Venezuela': 'Venezuela', 'Peru': 'Pérou', 'Costa Rica': 'Costa Rica',
-  'New Zealand': 'Nouvelle-Zélande', 'Iran': 'Iran', 'Qatar': 'Qatar',
+  // Amérique du Nord
+  'United States':      'États-Unis',
+  'USA':                'États-Unis',
+  'Mexico':             'Mexique',
+  'Canada':             'Canada',
+  'Costa Rica':         'Costa Rica',
+  // Amérique du Sud
+  'Brazil':             'Brésil',
+  'Argentina':          'Argentine',
+  'Uruguay':            'Uruguay',
+  'Colombia':           'Colombie',
+  'Chile':              'Chili',
+  'Ecuador':            'Équateur',
+  'Paraguay':           'Paraguay',
+  'Bolivia':            'Bolivie',
+  'Venezuela':          'Venezuela',
+  'Peru':               'Pérou',
+  // Europe
+  'France':             'France',
+  'Spain':              'Espagne',
+  'Germany':            'Allemagne',
+  'England':            'Angleterre',
+  'Portugal':           'Portugal',
+  'Netherlands':        'Pays-Bas',
+  'Belgium':            'Belgique',
+  'Italy':              'Italie',
+  'Croatia':            'Croatie',
+  'Poland':             'Pologne',
+  'Serbia':             'Serbie',
+  'Switzerland':        'Suisse',
+  'Denmark':            'Danemark',
+  'Austria':            'Autriche',
+  'Hungary':            'Hongrie',
+  'Turkey':             'Turquie',
+  'Turkiye':            'Turquie',   // variante API-Football
+  'Ukraine':            'Ukraine',
+  // Asie
+  'South Korea':        'Corée du Sud',
+  'Korea Republic':     'Corée du Sud', // variante FIFA
+  'Japan':              'Japon',
+  'Iran':               'Iran',
+  'Saudi Arabia':       'Arabie saoudite',
+  'Australia':          'Australie',
+  'Qatar':              'Qatar',
+  // Afrique
+  'Morocco':            'Maroc',
+  'Senegal':            'Sénégal',
+  'Cameroon':           'Cameroun',
+  'Nigeria':            'Nigeria',
+  'Ghana':              'Ghana',
+  "Ivory Coast":        "Côte d'Ivoire",
+  "Côte d'Ivoire":      "Côte d'Ivoire",
+  'Egypt':              'Égypte',
+  'Algeria':            'Algérie',
+  'Tunisia':            'Tunisie',
+  'Mali':               'Mali',
+  // Océanie
+  'New Zealand':        'Nouvelle-Zélande',
 };
 function norm(n) { return NAME_MAP[n] || n; }
 

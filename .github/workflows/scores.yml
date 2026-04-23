@@ -2,15 +2,15 @@ name: Mise à jour des scores
 
 on:
   schedule:
-    # Toutes les 10 minutes — le job vérifie lui-même si on est dans la période du tournoi
-    - cron: '*/10 * * * *'
-  workflow_dispatch:   # déclenchement manuel possible depuis l'onglet Actions
+    # Toutes les 15 min = 96 req/jour — dans la limite gratuite d'API-Football (100/jour)
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
 
 jobs:
   fetch-scores:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # pour pouvoir committer scores.json
+      contents: write
 
     steps:
       - name: Checkout
@@ -20,57 +20,84 @@ jobs:
         id: period
         run: |
           today=$(date -u +%Y-%m-%d)
-          # Actif du 11 juin au 19 juillet 2026 inclus
           if [[ "$today" > "2026-06-10" && "$today" < "2026-07-20" ]]; then
             echo "active=true"  >> "$GITHUB_OUTPUT"
           else
             echo "active=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Récupérer les scores (football-data.org)
+      - name: Récupérer les scores (API-Football / RapidAPI)
         if: steps.period.outputs.active == 'true' || github.event_name == 'workflow_dispatch'
         env:
-          FOOTBALL_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
         run: |
+          # League 1 = FIFA World Cup, Season 2026
           curl -sf \
-            -H "X-Auth-Token: $FOOTBALL_TOKEN" \
-            "https://api.football-data.org/v4/competitions/WC/matches" \
-            -o scores_raw.json
+            -H "X-RapidAPI-Key: $RAPIDAPI_KEY" \
+            -H "X-RapidAPI-Host: api-football-v1.p.rapidapi.com" \
+            "https://api-football-v1.p.rapidapi.com/v3/fixtures?league=1&season=2026" \
+            -o raw.json
 
-          # Alléger le JSON : on ne garde que le strict nécessaire
           python3 - <<'EOF'
           import json
           from datetime import datetime, timezone
 
-          with open("scores_raw.json") as f:
+          with open("raw.json") as f:
               data = json.load(f)
 
           slim = []
-          for m in data.get("matches", []):
+          for item in data.get("response", []):
+              fix    = item.get("fixture", {})
+              teams  = item.get("teams", {})
+              goals  = item.get("goals", {})
+              status = fix.get("status", {})
+
+              # Statut normalisé identique à football-data.org pour compatibilité
+              raw_status = status.get("short", "")
+              STATUS_MAP = {
+                  "NS":  "SCHEDULED",
+                  "1H":  "IN_PLAY",
+                  "HT":  "PAUSED",
+                  "2H":  "IN_PLAY",
+                  "ET":  "IN_PLAY",
+                  "P":   "IN_PLAY",
+                  "FT":  "FINISHED",
+                  "AET": "FINISHED",
+                  "PEN": "FINISHED",
+                  "PST": "POSTPONED",
+                  "CANC":"POSTPONED",
+              }
+              norm_status = STATUS_MAP.get(raw_status, "SCHEDULED")
+
               slim.append({
-                  "homeTeam": m["homeTeam"].get("name", ""),
-                  "awayTeam": m["awayTeam"].get("name", ""),
-                  "status":   m.get("status"),
-                  "score":    m.get("score", {}),
-                  "minute":   m.get("minute"),
+                  "homeTeam": teams.get("home", {}).get("name", ""),
+                  "awayTeam": teams.get("away", {}).get("name", ""),
+                  "status":   norm_status,
+                  "score": {
+                      "fullTime": {
+                          "home": goals.get("home"),
+                          "away": goals.get("away"),
+                      }
+                  },
+                  "minute": status.get("elapsed"),
               })
 
           out = {
               "matches": slim,
-              "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+              "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "source":  "api-football",
           }
           with open("scores.json", "w") as f:
               json.dump(out, f, separators=(",", ":"))
-          print(f"✓ {len(slim)} matchs écrits dans scores.json")
+          print(f"✓ {len(slim)} matchs — {sum(1 for m in slim if m['status'] in ('IN_PLAY','PAUSED'))} en direct")
           EOF
 
-      - name: Commit si le fichier a changé
+      - name: Commit si scores modifiés
         if: steps.period.outputs.active == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add scores.json
-          # Commit uniquement si des scores ont réellement changé
           git diff --staged --quiet \
-            && echo "Aucun changement de score." \
-            || git commit -m "chore: scores $(date -u '+%H:%M UTC')" && git push
+            && echo "Aucun changement." \
+            || (git commit -m "chore: scores $(date -u '+%H:%M UTC')" && git push)
