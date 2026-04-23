@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coupe du Monde FIFA 2026 — Calendrier Officiel</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="logo">⚽ <span>FIFA World Cup <strong>2026</strong></span></div>
+    <div class="header-meta">
+      <span>🗓 11 juin – 19 juillet 2026</span>
+      <span>🏟 16 villes · 104 matchs</span>
+      <span>🌎 USA · Canada · Mexique</span>
+    </div>
+  </div>
+</header>
+
+<section class="hero">
+  <h1>Calendrier Complet</h1>
+  <p>Tous les 104 matchs de la phase de groupes aux finales</p>
+  <div class="progress-bar-wrap">
+    <div id="progressBar" class="progress-bar"></div>
+  </div>
+  <p id="progressLabel" class="progress-label"></p>
+</section>
+
+<section class="filters-section">
+  <div class="filters-inner">
+    <div class="filter-group">
+      <label>Pays hôte</label>
+      <div class="btn-group" id="filterCountry">
+        <button class="btn-filter active" data-value="all">Tous</button>
+        <button class="btn-filter" data-value="USA">🇺🇸 USA</button>
+        <button class="btn-filter" data-value="Canada">🇨🇦 Canada</button>
+        <button class="btn-filter" data-value="Mexique">🇲🇽 Mexique</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <label>Phase</label>
+      <div class="btn-group" id="filterPhase">
+        <button class="btn-filter active" data-value="all">Toutes</button>
+        <button class="btn-filter" data-value="Groupes">Groupes</button>
+        <button class="btn-filter" data-value="Tour 32">Tour 32</button>
+        <button class="btn-filter" data-value="Huitièmes">Huitièmes</button>
+        <button class="btn-filter" data-value="Quarts">Quarts</button>
+        <button class="btn-filter" data-value="Demi-finales">Demi-finales</button>
+        <button class="btn-filter" data-value="3e place">3e place</button>
+        <button class="btn-filter" data-value="Finale">Finale</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <label>Groupe</label>
+      <div class="btn-group" id="filterGroup">
+        <button class="btn-filter active" data-value="all">Tous</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <label>Ville</label>
+      <select id="filterCity" class="select-filter">
+        <option value="all">Toutes les villes</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Équipe</label>
+      <input type="text" id="filterTeam" class="input-filter" placeholder="Ex: France, Brésil…">
+    </div>
+    <div class="filter-group filter-group--reset">
+      <button id="resetFilters" class="btn-reset">↺ Réinitialiser</button>
+    </div>
+  </div>
+</section>
+
+<section class="stats-bar">
+  <div class="stat"><span id="statTotal">104</span><small>matchs</small></div>
+  <div class="stat"><span id="statFiltered">104</span><small>affichés</small></div>
+  <div class="stat"><span>48</span><small>équipes</small></div>
+  <div class="stat"><span>16</span><small>villes</small></div>
+</section>
+
+<main id="calendar">
+  <!-- Injected by JS -->
+</main>
+
+<div id="modal" class="modal-overlay" hidden>
+  <div class="modal-box">
+    <button class="modal-close" id="modalClose">✕</button>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<footer>
+  <p>Données basées sur le calendrier officiel FIFA · 104 matchs · 11 juin – 19 juillet 2026</p>
+</footer>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
