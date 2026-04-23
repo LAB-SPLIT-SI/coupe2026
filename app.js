@@ -330,18 +330,29 @@
   });
   document.getElementById('apiSaveBtn').addEventListener('click', async () => {
     const token = document.getElementById('apiTokenInput').value.trim();
-    const status = document.getElementById('apiStatus');
-    if (!token) { status.textContent = 'Token vide.'; return; }
-    status.textContent = '⏳ Vérification…';
+    const statusEl = document.getElementById('apiStatus');
+    if (!token) { statusEl.textContent = 'Token vide.'; return; }
+
+    // Show smart pre-tournament message without hitting the API
+    const msg = WC_API.statusMessage();
+    if (msg) {
+      WC_API.saveToken(token);
+      statusEl.textContent = `✅ Token enregistré. ${msg}`;
+      apiBanner.style.display = 'none';
+      setTimeout(() => { apiModal.hidden = true; }, 3000);
+      return;
+    }
+
+    statusEl.textContent = '⏳ Vérification…';
     WC_API.saveToken(token);
     try {
       const scores = await WC_API.loadScores();
-      status.textContent = scores ? '✅ Connecté ! Scores chargés.' : '✅ Token enregistré. Les scores apparaîtront dès le début du tournoi.';
+      statusEl.textContent = scores ? '✅ Connecté ! Scores chargés.' : '✅ Token enregistré.';
       apiBanner.style.display = 'none';
       if (scores) applyScores(scores);
       setTimeout(() => { apiModal.hidden = true; }, 1800);
     } catch {
-      status.textContent = '❌ Token invalide ou quota dépassé.';
+      statusEl.textContent = '❌ Token invalide ou quota dépassé.';
     }
   });
 
@@ -369,8 +380,23 @@
 
   // Load scores if token already saved
   if (WC_API.getToken()) {
-    WC_API.loadScores().then(applyScores);
-    WC_API.startAutoRefresh(applyScores);
+    // Only hit the API during/after tournament — never before
+    if (WC_API.tournamentPhase() !== 'before') {
+      WC_API.loadScores().then(applyScores);
+      WC_API.startAutoRefresh(applyScores);
+    }
+  }
+
+  // Update banner text with countdown if before tournament
+  const phase = WC_API.tournamentPhase();
+  if (phase === 'before') {
+    const days = Math.ceil((new Date('2026-06-11') - new Date()) / 86400000);
+    const bannerSpan = apiBanner.querySelector('span');
+    if (bannerSpan) bannerSpan.textContent =
+      `⏳ Tournoi dans ${days} jour${days > 1 ? 's' : ''} · Enregistrez votre token API maintenant pour activer les scores en direct dès le coup d'envoi`;
+  } else if (phase === 'after') {
+    const bannerSpan = apiBanner.querySelector('span');
+    if (bannerSpan) bannerSpan.textContent = '🏆 Tournoi terminé — connectez votre token pour charger les scores finaux';
   }
 
 })();
